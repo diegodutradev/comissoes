@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Nova Venda</h2>
+<form method="post" class="card p-3">
+  <div class="mb-3">
+    <label class="form-label">Colaborador</label>
+    <select name="collaborator_id" class="form-select">
+      {% for c in collaborators %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3 row">
+    <div class="col-md-6">
+      <label class="form-label">Nome do Cliente</label>
+      <input class="form-control" name="client_name" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Valor da Venda (R$)</label>
+      <input type="number" step="0.01" class="form-control" name="amount" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Data do 1º pagamento do cliente</label>
+      <input type="date" class="form-control" name="client_first_payment_date" required>
+    </div>
+  </div>
+
+  <button class="btn btn-primary">Salvar venda</button>
+</form>
+{% endblock %}

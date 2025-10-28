@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Colaboradores</h1>
+
+<form method="post" action="{{ url_for('collaborator_new') }}" class="row g-2 mb-4">
+  <div class="col-md-4"><input class="form-control" name="name" placeholder="Nome"></div>
+  <div class="col-md-3"><input class="form-control" name="phone" placeholder="Telefone"></div>
+  <div class="col-md-3"><input class="form-control" name="email" placeholder="Email"></div>
+  <div class="col-md-2"><button class="btn btn-success w-100">Adicionar</button></div>
+</form>
+
+<table class="table table-striped">
+  <thead><tr><th>Nome</th><th>Contato</th><th>Vendas</th><th>Ações</th></tr></thead>
+  <tbody>
+    {% for c in collaborators %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.phone or "" }}<br>{{ c.email or "" }}</td>
+        <td>{{ c.sales|length }}</td>
+        <td><a class="btn btn-sm btn-primary" href="{{ url_for('collaborator_detail', cid=c.id) }}">Ver</a></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

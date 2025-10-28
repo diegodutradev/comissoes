@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Colaborador: {{ collaborator.name }}</h2>
+<p>Contato: {{ collaborator.phone }} / {{ collaborator.email }}</p>
+
+<hr>
+
+<form method="get" class="row g-2 mb-4">
+  <div class="col-md-2">
+    <label class="form-label">Mês</label>
+    <input type="number" name="month" class="form-control" min="1" max="12" value="{{ month }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Ano</label>
+    <input type="number" name="year" class="form-control" value="{{ year }}">
+  </div>
+  <div class="col-md-2 align-self-end">
+    <button class="btn btn-primary w-100">Filtrar</button>
+  </div>
+</form>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h4>Resumo do mês {{ month }}/{{ year }}</h4>
+    <p><strong>Total vendido (clientes pagos):</strong> R$ {{ "%.2f"|format(total_vendido) }}</p>
+    <p><strong>Percentual aplicado:</strong> {{ "%.0f"|format((percentual - 1) * 100) }}%</p>
+    <p><strong>Comissão total:</strong> R$ {{ "%.2f"|format(valor_comissao) }}</p>
+  </div>
+</div>
+
+<h4>Vendas do colaborador</h4>
+<table class="table table-striped">
+  <thead>
+    <tr><th>Cliente</th><th>Valor</th><th>Data</th><th>Status cliente</th><th>Data repasse</th><th>Status repasse</th><th>Ações</th></tr>
+  </thead>
+  <tbody>
+    {% for s in todas_vendas %}
+      {% for inst in s.installments %}
+      <tr class="{% if inst.client_paid %}table-success{% endif %}">
+        <td>{{ s.client_name }}</td>
+        <td>R$ {{ "%.2f"|format(s.amount) }}</td>
+        <td>{{ s.client_first_payment_date }}</td>
+        <td>
+          {% if inst.client_paid %}
+            Pago em {{ inst.client_paid_date }}
+          {% else %}
+            Pendente
+          {% endif %}
+        </td>
+        <td>{{ inst.collaborator_receipt_date or '-' }}</td>
+        <td>
+          {% if inst.collaborator_paid %}
+            Pago ao colaborador ({{ inst.collaborator_paid_date }})
+          {% else %}
+            Não pago
+          {% endif %}
+        </td>
+        <td style="min-width:250px;">
+          <form action="{{ url_for('mark_client_paid', inst_id=inst.id) }}" method="post" class="d-inline">
+            <input type="date" name="client_paid_date" class="form-control form-control-sm mb-1">
+            <button class="btn btn-sm btn-outline-success">Cliente pagou</button>
+          </form>
+          <form action="{{ url_for('mark_collaborator_paid', inst_id=inst.id) }}" method="post" class="d-inline">
+            <input type="date" name="collaborator_paid_date" class="form-control form-control-sm mb-1">
+            <button class="btn btn-sm btn-outline-primary">Colaborador recebeu</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
