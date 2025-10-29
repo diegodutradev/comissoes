@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-12">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div>
+        <h1 class="h3 mb-0">Painel</h1>
+        <div class="small-muted">Acesse as principais telas do sistema</div>
+      </div>
+      <div>
+        <a href="{{ url_for('sale_new') }}" class="btn btn-primary">Nova venda</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card card-highlight p-3 h-100">
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">Colaboradores</h5>
+        <p class="small-muted mb-3">Gerencie colaboradores: cadastrar, ver vendas e repasses.</p>
+        <a href="{{ url_for('collaborators_list') }}" class="mt-auto btn btn-outline-primary">Ir para Colaboradores</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card card-highlight p-3 h-100">
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">Cadastrar venda</h5>
+        <p class="small-muted mb-3">Registre uma nova venda e gere as parcelas automaticamente.</p>
+        <a href="{{ url_for('sale_new') }}" class="mt-auto btn btn-outline-primary">Registrar Venda</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card card-highlight p-3 h-100">
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">Relatórios</h5>
+        <p class="small-muted mb-3">Resumo mensal por colaborador (em breve).</p>
+        <a href="{{ url_for('collaborators_list') }}" class="mt-auto btn btn-outline-secondary">Ver Relatórios</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

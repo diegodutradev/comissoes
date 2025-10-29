@@ -63,8 +63,15 @@ def get_first_paid_installments_for_collaborator_month(db, collab_id, month, yea
 
 
 # --- Rotas ---
+# Substitua a função index() atual por este bloco
 @app.route("/")
 def index():
+    # dashboard / menu inicial
+    return render_template("index.html")
+
+
+@app.route("/collaborators")
+def collaborators_list():
     db = Session()
     collaborators = db.query(Collaborator).order_by(Collaborator.name).all()
     return render_template("collaborators.html", collaborators=collaborators)
