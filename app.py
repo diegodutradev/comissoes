@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from sqlalchemy import create_engine, extract
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models import Base, Collaborator, Sale, CommissionInstallment
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 DATABASE_URL = "sqlite:///comissoes.db"
 app = Flask(__name__)
@@ -11,6 +11,7 @@ app.secret_key = "troque_para_uma_chave_secreta"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Base.metadata.bind = engine
 Session = scoped_session(sessionmaker(bind=engine))
+
 
 # --- Helpers ---
 def add_months(orig_date, months):
@@ -23,6 +24,7 @@ def add_months(orig_date, months):
         except ValueError:
             day -= 1
 
+
 def compute_commission_multiplier(amount):
     if amount <= 2000:
         return 1.2
@@ -31,6 +33,7 @@ def compute_commission_multiplier(amount):
     else:
         return 1.6
 
+
 def compute_collaborator_receipt_date(client_paid_date: date):
     if client_paid_date.day <= 5:
         return date(client_paid_date.year, client_paid_date.month, 20)
@@ -38,12 +41,34 @@ def compute_collaborator_receipt_date(client_paid_date: date):
         next_month = add_months(client_paid_date, 1)
         return date(next_month.year, next_month.month, 5)
 
+
+def get_first_paid_installments_for_collaborator_month(db, collab_id, month, year):
+    """
+    Retorna lista de CommissionInstallment com index == 1 e client_paid True
+    cujo client_paid_date está no mês/ano informado.
+    """
+    return (
+        db.query(CommissionInstallment)
+        .join(Sale)
+        .filter(
+            Sale.collaborator_id == collab_id,
+            CommissionInstallment.index == 1,
+            CommissionInstallment.client_paid == True,
+            CommissionInstallment.client_paid_date != None,
+            extract("month", CommissionInstallment.client_paid_date) == month,
+            extract("year", CommissionInstallment.client_paid_date) == year,
+        )
+        .all()
+    )
+
+
 # --- Rotas ---
 @app.route("/")
 def index():
     db = Session()
     collaborators = db.query(Collaborator).order_by(Collaborator.name).all()
     return render_template("collaborators.html", collaborators=collaborators)
+
 
 @app.route("/collaborator/new", methods=["POST"])
 def collaborator_new():
@@ -60,6 +85,7 @@ def collaborator_new():
     flash("Colaborador criado.", "success")
     return redirect(url_for("index"))
 
+
 @app.route("/collaborator/<int:cid>")
 def collaborator_detail(cid):
     db = Session()
@@ -68,29 +94,47 @@ def collaborator_detail(cid):
         flash("Colaborador não encontrado", "danger")
         return redirect(url_for("index"))
 
-    # Filtro de mês e ano (padrão: mês atual)
+    # Filtro de mês e ano
     month = request.args.get("month", datetime.now().month, type=int)
     year = request.args.get("year", datetime.now().year, type=int)
 
-    # Pega todas as vendas do colaborador com parcelas pagas nesse mês
-    installments = (
+    # --- Total de vendas cujo 1º pagamento foi marcado como pago neste mês (usado para determinar multiplier) ---
+    first_paid_installments = get_first_paid_installments_for_collaborator_month(db, cid, month, year)
+    # soma do valor original das vendas correspondentes (sale.amount)
+    total_vendido = sum(inst.sale.amount for inst in first_paid_installments)
+
+    # percentual e valor extra referente às vendas do mês
+    percentual = compute_commission_multiplier(total_vendido)
+    valor_comissao = round(total_vendido * (percentual - 1.0), 2)
+
+    # --- Parcelas que CAEM neste mês para o colaborador (baseado em collaborator_receipt_date) ---
+    parcelas_a_pagar = (
         db.query(CommissionInstallment)
         .join(Sale)
         .filter(
             Sale.collaborator_id == cid,
-            extract("month", CommissionInstallment.client_paid_date) == month,
-            extract("year", CommissionInstallment.client_paid_date) == year,
-            CommissionInstallment.client_paid == True
+            CommissionInstallment.client_paid == True,
+            CommissionInstallment.collaborator_receipt_date != None,
+            extract("month", CommissionInstallment.collaborator_receipt_date) == month,
+            extract("year", CommissionInstallment.collaborator_receipt_date) == year
         )
         .all()
     )
 
-    # Calcula total de vendas pagas no mês
-    total_vendido = sum(inst.amount for inst in installments)
-    percentual = compute_commission_multiplier(total_vendido)
-    valor_comissao = round(total_vendido * (percentual - 1), 2)
+    # separar origem: vendas do mesmo mês (sale.client_first_payment_date) vs vendas anteriores
+    total_from_current_sales = 0.0
+    total_from_previous_sales = 0.0
+    for p in parcelas_a_pagar:
+        sale_month = p.sale.client_first_payment_date.month
+        sale_year = p.sale.client_first_payment_date.year
+        if sale_month == month and sale_year == year:
+            total_from_current_sales += p.amount
+        else:
+            total_from_previous_sales += p.amount
 
-    # Agrupa vendas do colaborador
+    total_to_pay = round(total_from_current_sales + total_from_previous_sales, 2)
+
+    # Todas as vendas para listagem
     todas_vendas = db.query(Sale).filter(Sale.collaborator_id == cid).all()
 
     return render_template(
@@ -99,12 +143,16 @@ def collaborator_detail(cid):
         total_vendido=total_vendido,
         percentual=percentual,
         valor_comissao=valor_comissao,
+        total_from_current_sales=total_from_current_sales,
+        total_from_previous_sales=total_from_previous_sales,
+        total_to_pay=total_to_pay,
         todas_vendas=todas_vendas,
         month=month,
         year=year
     )
 
-@app.route("/sale/new", methods=["GET","POST"])
+
+@app.route("/sale/new", methods=["GET", "POST"])
 def sale_new():
     db = Session()
     if request.method == "GET":
@@ -131,18 +179,22 @@ def sale_new():
     db.add(sale)
     db.flush()
 
-    # cria apenas uma parcela (a do cliente)
-    inst = CommissionInstallment(
-        sale_id = sale.id,
-        index = 1,
-        client_due_date = client_first_payment_date,
-        amount = amount
-    )
-    db.add(inst)
-    db.commit()
+    # --- Cria 3 parcelas: mês da venda, +1 mês, +2 meses.
+    # Inicialmente: 1ª parcela recebe o valor da venda; 2ª e 3ª ficam com 0.0 (serão preenchidas quando 1ª for paga)
+    for i in range(3):
+        amt = round(amount, 2) if i == 0 else 0.0
+        inst = CommissionInstallment(
+            sale_id=sale.id,
+            index=i + 1,
+            client_due_date=add_months(client_first_payment_date, i),
+            amount=amt
+        )
+        db.add(inst)
 
-    flash("Venda cadastrada com sucesso.", "success")
+    db.commit()
+    flash("Venda cadastrada e parcelas geradas com sucesso.", "success")
     return redirect(url_for("collaborator_detail", cid=collab_id))
+
 
 @app.route("/installment/<int:inst_id>/mark_client_paid", methods=["POST"])
 def mark_client_paid(inst_id):
@@ -153,18 +205,47 @@ def mark_client_paid(inst_id):
         return redirect(url_for("index"))
 
     date_str = request.form.get("client_paid_date")
-    if date_str:
-        cp_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    else:
-        cp_date = date.today()
+    cp_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else date.today()
 
     inst.client_paid = True
     inst.client_paid_date = cp_date
     inst.collaborator_receipt_date = compute_collaborator_receipt_date(cp_date)
 
     db.commit()
-    flash("Pagamento do cliente registrado.", "success")
+
+    # Se for a 1ª parcela (index == 1), recalculamos e distribuímos o "extra" para parcelas 2 e 3
+    if inst.index == 1:
+        collab_id = inst.sale.collaborator_id
+        month = cp_date.month
+        year = cp_date.year
+
+        # pega todas as first-paid installments desse colaborador no mesmo mês (para recalcular com base no total do mês)
+        first_paid = get_first_paid_installments_for_collaborator_month(db, collab_id, month, year)
+        total_paid_sales = sum(fi.sale.amount for fi in first_paid)
+        multiplier = compute_commission_multiplier(total_paid_sales)
+
+        # Para cada venda cuja 1ª parcela foi paga nesse mês, atualizamos as parcelas 2 e 3
+        for fi in first_paid:
+            sale_obj = fi.sale
+            extra = round(sale_obj.amount * (multiplier - 1.0), 2)
+            # dividir o extra entre parcela 2 e 3 (metade cada)
+            part = round(extra / 2.0, 2)
+
+            inst2 = db.query(CommissionInstallment).filter_by(sale_id=sale_obj.id, index=2).one_or_none()
+            inst3 = db.query(CommissionInstallment).filter_by(sale_id=sale_obj.id, index=3).one_or_none()
+
+            if inst2:
+                inst2.amount = part
+            if inst3:
+                inst3.amount = part
+
+        db.commit()
+        flash("Pagamento do cliente registrado; parcelas 2 e 3 atualizadas com base no total do mês.", "success")
+    else:
+        flash("Pagamento do cliente registrado.", "success")
+
     return redirect(request.referrer or url_for("index"))
+
 
 @app.route("/installment/<int:inst_id>/mark_collaborator_paid", methods=["POST"])
 def mark_collaborator_paid(inst_id):
@@ -175,16 +256,14 @@ def mark_collaborator_paid(inst_id):
         return redirect(url_for("index"))
 
     date_str = request.form.get("collaborator_paid_date")
-    if date_str:
-        p_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    else:
-        p_date = date.today()
+    p_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else date.today()
 
     inst.collaborator_paid = True
     inst.collaborator_paid_date = p_date
     db.commit()
     flash("Pagamento ao colaborador marcado.", "success")
     return redirect(request.referrer or url_for("index"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

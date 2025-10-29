@@ -19,6 +19,7 @@
   </div>
 </form>
 
+{# 
 <div class="card mb-4">
   <div class="card-body">
     <h4>Resumo do mês {{ month }}/{{ year }}</h4>
@@ -27,11 +28,37 @@
     <p><strong>Comissão total:</strong> R$ {{ "%.2f"|format(valor_comissao) }}</p>
   </div>
 </div>
+#}
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h4>Resumo do mês {{ month }}/{{ year }}</h4>
+    <p><strong>Total de vendas com 1ª parcela paga (mês):</strong> R$ {{ "%.2f"|format(total_vendido) }}</p>
+    <p><strong>Percentual aplicado (com base nas vendas pagas do mês):</strong> {{ "%.0f"|format((percentual - 1) * 100) }}%</p>
+    <p><strong>Comissão referente às vendas do mês (extra):</strong> R$ {{ "%.2f"|format(valor_comissao) }}</p>
+
+    <hr>
+    <h5>Parcelas que CAEM neste mês (baseado em data de repasse ao colaborador)</h5>
+    <p><strong>Provenientes de vendas do próprio mês:</strong> R$ {{ "%.2f"|format(total_from_current_sales) }}</p>
+    <p><strong>Provenientes de vendas anteriores (2ª/3ª parcelas):</strong> R$ {{ "%.2f"|format(total_from_previous_sales) }}</p>
+    <hr>
+    <h5>Total a pagar neste mês:</h5>
+    <h3>R$ {{ "%.2f"|format(total_to_pay) }}</h3>
+  </div>
+</div>
 
 <h4>Vendas do colaborador</h4>
 <table class="table table-striped">
   <thead>
-    <tr><th>Cliente</th><th>Valor</th><th>Data</th><th>Status cliente</th><th>Data repasse</th><th>Status repasse</th><th>Ações</th></tr>
+    <tr>
+      <th>Cliente</th>
+      <th>Valor</th>
+      <th>Data</th>
+      <th>Status cliente</th>
+      <th>Data repasse</th>
+      <th>Status repasse</th>
+      <th>Ações</th>
+    </tr>
   </thead>
   <tbody>
     {% for s in todas_vendas %}
